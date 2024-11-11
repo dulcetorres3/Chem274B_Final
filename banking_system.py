@@ -5,6 +5,8 @@ class BankingSystem(ABC):
     """
     `BankingSystem` interface.
     """
+    def __init__(self):
+        self.accounts = {}
 
     def create_account(self, timestamp: int, account_id: str) -> bool:
         """
@@ -13,8 +15,14 @@ class BankingSystem(ABC):
         Returns `True` if the account was successfully created or
         `False` if an account with `account_id` already exists.
         """
-        # default implementation
-        return False
+        # return false if account already exists 
+        if account_id in self.accounts:
+            return False
+        
+        # initialize an account in the account dictionary with balance of zero
+        self.accounts[account_id] = 0
+        return True
+
 
     def deposit(self, timestamp: int, account_id: str, amount: int) -> int | None:
         """
@@ -25,8 +33,15 @@ class BankingSystem(ABC):
         If the specified account doesn't exist, should return
         `None`.
         """
-        # default implementation
-        return None
+        # return none if account does not exist
+        if account_id not in self.accounts:
+            return None
+        
+        # add given amount to provided account
+        self.accounts[account_id] += amount
+
+        # return new balance in the account
+        return self.accounts[account_id]
 
     def transfer(self, timestamp: int, source_account_id: str, target_account_id: str, amount: int) -> int | None:
         """
@@ -41,8 +56,29 @@ class BankingSystem(ABC):
           * Returns `None` if account `source_account_id` has
           insufficient funds to perform the transfer.
         """
-        # default implementation
-        return None
+        # return None if source account does not exist
+        if source_account_id or target_account_id  not in self.accounts:
+            return None
+        
+        # return None target and soource ids are the same
+        if target_account_id == source_account_id:
+            return None
+        
+        # return None if source account has insufficient funds
+        if self.accounts[source_account_id] < amount:
+            return None
+        
+        # trasfer funds from source to target
+        self.accounts[source_account_id] -= amount
+        self.accounts[target_account_id] += amount
+
+        # return balance of source
+        return self.accounts[source_account_id]
+        
+
+            
+            
+        
 
     def top_spenders(self, timestamp: int, n: int) -> list[str]:
         """
