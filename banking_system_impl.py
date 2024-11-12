@@ -18,4 +18,15 @@ class BankingSystemImpl(BankingSystem):
         self.accounts[account_id] = 0
         return True
         
-    
+    def deposit(self, timestamp: int, account_id: str, amount: int) -> int | None:
+      
+        # Return None if account does not exist
+        if account_id not in self.accounts:
+            return None
+            
+        # Add given amount to provided account
+        self.accounts[account_id] += amount
+      
+        # Return the new balance of the account
+        return self.accounts[account_id]
+          
