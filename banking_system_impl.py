@@ -111,16 +111,16 @@ class BankingSystemImpl(BankingSystem):
          "processed" : False }
 
 
-        """
+
         print(f'before cashback loop: {self.accounts[account_id]}')
         
         #if self.process_cashback[self.payment_id]["timestamp"] <= timestamp:
         if timestamp >= wait_time:
-        self.deposit(wait_time, account_id, cashback)
+            self.deposit(wait_time, account_id, cashback)
             self.accounts[account_id] += cashback
         
         print(f'after cashback loop: {self.accounts[account_id]}')
-        """
+
 
         self.payment_transaction[self.payment_id]= account_id
 
@@ -132,7 +132,7 @@ class BankingSystemImpl(BankingSystem):
         #account check 
         if account_id not in self.accounts:
             return None
-        """
+
         # split payment string into a list of characters
         characters = list(payment)
 
@@ -140,10 +140,8 @@ class BankingSystemImpl(BankingSystem):
         index = len(characters) - 1
         payment_number = int(characters[index])
         print(f'payment string: {payment}, payment number: {payment_number}')
-        """
 
-        payment_number = int(payment[7:])
-        payment_id = f"payment{payment_number}"
+
         
         
         # compare the last character with the payment attribute
@@ -155,7 +153,7 @@ class BankingSystemImpl(BankingSystem):
             return None
 
         # Access cashback dictionary
-        cashback_info = self.process_cashback[payment_id]
+        cashback_info = self.process_cashback[payment_number]
         
         # Check whether cashback has already been processed
         if cashback_info["processed"] == True:
