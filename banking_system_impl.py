@@ -1,5 +1,5 @@
 from banking_system import BankingSystem
-
+from collections import defaultdict
 
 class BankingSystemImpl(BankingSystem):
 
@@ -7,6 +7,9 @@ class BankingSystemImpl(BankingSystem):
         # TODO: implement
         self.accounts = {}
         self.outgoing_transactions = {}
+        self.payments = {}
+        self.payment_counter = 0
+        self.cashback_schedule = defaultdict(list)
 
     # TODO: implement interface methods here
     
@@ -54,6 +57,33 @@ class BankingSystemImpl(BankingSystem):
         # return balance of source
         return self.accounts[source_account_id]
 
+    def pay(self, timestamp: int, account_id: str, amount: int) -> str | None:
+        
+        if account_id not in self.accounts or self.accounts[account_id] < amount:
+            return None
+        
+        self.accounts[account_id] -= amount
+
+        self.outgoing_transactions[account_id] += amount
+
+        self.payment_counter += 1
+
+        payment_id = f"payment{self.payment_counter}"
+
+        self.payments[payment_id] = {
+            "timestamp" : timestamp,
+            "account_id" : account_id,
+            "amount" : amount,
+            "cashback" : amount // 50,
+            "status" : "IN_PROGRESS"
+        }
+
+        cashback_time = timestamp + 86400000
+        self.cashback_schedule[cashback_time].append(payment_id)
+
+        return payment_id
+
+
     def top_spenders(self, timestamp: int, n: int) -> list[str]:
         #sorted_trans = sorted(self.outgoing_transactions.items(), key=lambda item: item[1], reverse=True)
         sorted_trans = sorted(self.outgoing_transactions.items(), key=lambda x: (-int(x[1]), x[0]))
@@ -79,6 +109,8 @@ class BankingSystemImpl(BankingSystem):
         sorted_result = [ f"{account_id}({outgoing})" for account_id, outgoing in top_list]
 
         return sorted_result
+
+        
     
 
 if __name__ == "__main__":
