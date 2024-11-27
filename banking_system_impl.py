@@ -1,15 +1,16 @@
 from banking_system import BankingSystem
-from collections import defaultdict
+
 
 class BankingSystemImpl(BankingSystem):
 
     def __init__(self):
         # TODO: implement
-        self.accounts = {}
-        self.outgoing_transactions = {}
-        self.payments = {}
-        self.payment_counter = 0
-        self.cashback_schedule = defaultdict(list)
+        self.accounts = {} # Tracks account_id and balance
+        self.outgoing_transactions = {} # Tracks account_id and total outgoing transactions for that account
+        self.payment_counter = 0 # Incrementer used to track unique payments
+        self.pending_cashbacks = [] # List of list to track cashback information (timestamp, account_id, payment_id, amount)
+        self.payments = {} # Tracks account_ID and it's corresponding payment_IDs.
+
 
     # TODO: implement interface methods here
     
@@ -24,11 +25,14 @@ class BankingSystemImpl(BankingSystem):
         return True
         
     def deposit(self, timestamp: int, account_id: str, amount: int) -> int | None:
-      
+        
+        # Process existing payments for cashback before running deposit operation
+        self.process_cashback(timestamp)
+
         # Return None if account does not exist
         if account_id not in self.accounts:
             return None
-            
+
         # Add given amount to provided account
         self.accounts[account_id] += amount
       
@@ -36,6 +40,10 @@ class BankingSystemImpl(BankingSystem):
         return self.accounts[account_id]
 
     def transfer(self, timestamp: int, source_account_id: str, target_account_id: str, amount: int) -> int | None:
+        
+        # Process existing payments for cashback before running transfer operation
+        self.process_cashback(timestamp)
+        
         # return None if source account does not exist
         if source_account_id not in self.accounts or target_account_id not in self.accounts:
             return None
@@ -52,91 +60,107 @@ class BankingSystemImpl(BankingSystem):
         self.accounts[source_account_id] -= amount
         self.accounts[target_account_id] += amount
 
+        # Update outgoing transactions with transfered amount
         self.outgoing_transactions[source_account_id] += amount
 
         # return balance of source
         return self.accounts[source_account_id]
 
-    def pay(self, timestamp: int, account_id: str, amount: int) -> str | None:
-        
-        if account_id not in self.accounts or self.accounts[account_id] < amount:
-            return None
-        
-        self.accounts[account_id] -= amount
-
-        self.outgoing_transactions[account_id] += amount
-
-        self.payment_counter += 1
-
-        payment_id = f"payment{self.payment_counter}"
-
-        self.payments[payment_id] = {
-            "timestamp" : timestamp,
-            "account_id" : account_id,
-            "amount" : amount,
-            "cashback" : amount // 50,
-            "status" : "IN_PROGRESS"
-        }
-
-        cashback_time = timestamp + 86400000
-        self.cashback_schedule[cashback_time].append(payment_id)
-
-        return payment_id
-
-
     def top_spenders(self, timestamp: int, n: int) -> list[str]:
         #sorted_trans = sorted(self.outgoing_transactions.items(), key=lambda item: item[1], reverse=True)
         sorted_trans = sorted(self.outgoing_transactions.items(), key=lambda x: (-int(x[1]), x[0]))
 
-           
         if len(self.accounts) < n:
             top_list = sorted_trans
         else: 
             top_list = sorted_trans[:n]
 
-        """""
-        for i in range(len(top_list) - 1):
-            if top_list[i][1] == top_list[i+1][1]:
-                print(f"Account{i} : {top_list[i][1]} Account{i} : {top_list[i][1+1]}")
-                #if top_list[i][0] < top_list[i+1][0]:
-                   # top_list[i], top_list[i+1] = top_list[i+1], top_list[i]
-            #if len(top_list) > 1:
-                if top_list[i][0] < top_list[i+1][0]:
-                    
-                    top_list[i], top_list[i+1] = top_list[i+1], top_list[i]
-        """
-
         sorted_result = [ f"{account_id}({outgoing})" for account_id, outgoing in top_list]
 
         return sorted_result
 
+    def pay(self, timestamp:int , account_id: str, amount:int) -> str | None:
+
+        # Process existing payments for cashback before running pay operation
+        self.process_cashback(timestamp)
+
+        # Return none if account id doesn't exist
+        if account_id not in self.accounts:
+            return None
         
-    
+        # Return none if account id has insufficient funds
+        if self.accounts[account_id] < amount:
+            return None
+        
+        # Update top spenders with the amount being paid
+        self.outgoing_transactions[account_id] += amount
+
+        # Increment payment counter to track payment ID
+        self.payment_counter += 1
+
+        # Create an account ID based on the payment counter
+        payment_id = f"payment{self.payment_counter}"
+
+
+        # Track pending cashbacks with the amount of cashback and the cashback time
+        cashback = amount // 50 # Calculated cashback
+        cashback_time = timestamp + 86400000 # 24 hours in ms + current timestamp
+        self.pending_cashbacks.append((cashback_time, account_id, payment_id, cashback))
+
+        # Withdraw ammount from account
+        self.accounts[account_id] -= amount
+
+
+        # Add a payment_ID to an account, and if account has no exisitng payments, initialize an empty list.
+        if account_id not in self.payments:
+            self.payments[account_id] = []
+        self.payments[account_id].append(payment_id)
+
+        # Return the payment_ID of the transaction
+        return payment_id
+
+    def process_cashback(self, timestamp: int):
+
+        # Access the variables of the pending_cashbacks list
+        for cashback_time, account_id, payment_id, cashback in list(self.pending_cashbacks):
+
+            # Only apply cashback if the timestamp exceeds 24 hours for a payment_ID
+            if timestamp >= cashback_time:
+                
+                # Add cashback amount
+                self.accounts[account_id] += cashback
+
+                # Remove the pending cashback transaction after it has been processed
+                self.pending_cashbacks.remove((cashback_time, account_id, payment_id, cashback))
+
+    def get_payment_status(self, timestamp: int, account_id: str, payment: str) -> str | None:
+
+        # Process existing payments for cashback before running status operation
+        self.process_cashback(timestamp)
+
+        # Return none if account_id doesn't exist
+        if account_id not in self.payments:
+            return None
+        
+        # Return none if the given payment does not exist for the specified account
+        if payment not in self.payments[account_id]:
+            return None
+        
+        # Return none if the payment transaction was for an account
+        # with a different identifier from account_id
+        if payment not in self.payments.get(account_id, []):
+            return None
+        
+        # Access varibales in the list of pending cashbacks and return "IN_PROGRESS" if the timestamp is less than 
+        # the cashback time for a specific account id and payment id
+        for cashback_time, cashback_account_id, cashback_payment_id, cashback_amount in self.pending_cashbacks:
+            if cashback_account_id == account_id and cashback_payment_id == payment:
+                if timestamp < cashback_time:
+                    return "IN_PROGRESS"
+                
+        # If this point is reached, cashback has been successfully processed.
+        return "CASHBACK_RECEIVED"
 
 if __name__ == "__main__":
     
     bs = BankingSystemImpl()
-
-    # Create account 1
-    bs.create_account(1, "account1")
-
-    # Deposit 100 dollars
-    bs.deposit(2, "account1", 100)
-
-    # Create account 2
-    bs.create_account(3, "account2")
-
-    # Transfer from account 1 to account 2
-    print(bs.transfer(4, "account1", "account2", 50))
-
-    # Print all accounts
-    print(bs.accounts)
-
-    bs.create_account(5, "account3")
-
-    bs.deposit(6, "account3", 500)
-
-    # Print the top 3 spenders
-    print(bs.top_spenders(7, 3))
-
-
