@@ -8,10 +8,16 @@ class BankingSystemImpl(BankingSystem):
         self.accounts = {}
         self.outgoing_transactions = {}
         self.payment_transaction= {}
-        self.time = {}
+        #self.time = {}
         self.process_cashback = {}
-        self.payment = {}
+        #self.payment = {}
         self.payment_id = 0
+
+        #dictonary containing all of the information associated with a payment-- each entry in the dictionary is unqiue to an account_id and timestamp
+        self.new_dict = {}
+        #increment every time a valie payment initiated
+        self.payment_number = 0
+
 
 
     # TODO: implement interface methods here
@@ -28,6 +34,7 @@ class BankingSystemImpl(BankingSystem):
         
     def deposit(self, timestamp: int, account_id: str, amount: int) -> int | None:
       
+        
         # Return None if account does not exist
         if account_id not in self.accounts:
             return None
@@ -72,8 +79,7 @@ class BankingSystemImpl(BankingSystem):
         sorted_result = [ f"{account_id}({outgoing})" for account_id, outgoing in top_list]
 
         return sorted_result
-
-
+    
     def pay(self, timestamp: int, account_id: str, amount: int) -> str | None:
 
         #account check
@@ -83,7 +89,105 @@ class BankingSystemImpl(BankingSystem):
         #insufficient funds check 
         if self.accounts[account_id] < amount:
             return None 
+        
 
+        # increment self.payemnt_number 
+        self.payment_number+= 1
+
+        #if payment new, add the info associated with payment to dictionary
+        if (account_id, self.payment_number) not in self.new_dict:
+
+            # Calculate Cashback amount
+            cashback = round(amount * 0.02)
+
+            self.new_dict[(account_id, self.payment_number)] = {
+                "amount" : amount,
+                "payment" : self.payment_number,
+                "cashback" : cashback,
+                "timestamp" : timestamp + 86400000,
+                "processed" : False
+
+            }
+
+            # subtract amount from account balance
+            self.accounts[account_id] -= amount
+
+            # update outgoing transactions
+            self.outgoing_transactions[account_id] += amount
+
+            return (f"payment{self.payment_number}")
+        
+        #if payment had already been initialized in the dictionary, subtract payment_number 
+        self.payment_number-= 1
+
+        # if payment transaction already exists, check if timestamp wait time is fulfilled
+        if (account_id, timestamp) in self.new_dict:
+
+            # if 24 hours has passsed since the payment has been initiated, deposit cashback 
+            if timestamp >= self.new_dict[(account_id, timestamp)]['timestamp']:
+                self.accounts[account_id]+= self.new_dict[(account_id, timestamp)]['cashback']
+                self.new_dict[(account_id, self.payment_number)]['processed'] = True
+
+
+
+    def get_payment_status(self, timestamp: int, account_id: str, payment: str) -> str | None :
+        #account check 
+        if account_id not in self.accounts:
+            return None
+
+        # split payment string into a list of characters
+        characters = list(payment)
+
+        # cast the last character into an integer
+        index = len(characters) - 1
+        payment_number = int(characters[index])
+        print(f'payment string: {payment}, payment number: {payment_number}')
+
+
+
+        # compare the last character with the payment attribute
+        if (account_id, payment_number) not in self.new_dict:
+            return None
+
+
+        # Access cashback dictionary
+        cashback_info = self.new_dict[(account_id, payment_number)]
+
+        # determine ammount associated with payment
+        amount = self.new_dict[(account_id, payment_number)]['amount']
+
+        #print(f'Timestamp: {self.new_dict[(account_id, timestamp)]['timestamp']}')
+
+        # call pay function if the timestamp is fulfilled
+        if timestamp >= self.new_dict[(account_id, payment_number)]['timestamp']:
+            self.pay(timestamp, account_id, amount)
+
+        # Check whether cashback has already been processed
+        if cashback_info["processed"] == True:
+            return "CASHBACK_RECEIVED"
+        else:
+            return "IN_PROGRESS"
+
+        """
+        # This should add cashback amount to account balance
+        if cashback_info["timestamp"] <= timestamp:
+            self.accounts[account_id] += cashback_info["cashback"]
+            cashback_info['processed'] = True
+            return "CASHBACK_RECEIVED"
+        """
+        # If you get this far, payment is still in progress
+        #return "IN_PROGRESS"
+
+    """
+    def pay(self, timestamp: int, account_id: str, amount: int) -> str | None:
+
+        #account check
+        if account_id not in self.accounts:
+            return None
+
+        #insufficient funds check 
+        if self.accounts[account_id] < amount:
+            return None 
     
         # Calculate Cashback amount
         cashback = round(amount * 0.02)
@@ -104,32 +208,31 @@ class BankingSystemImpl(BankingSystem):
 
         # Dictionary to store cashback information
         # such as amount, account_id, timestamp, and processed status
-        self.process_cashback[self.payment_id] = {
+        self.process_cashback[(account_id, self.payment_id)] = {
          "cashback" : cashback,
-         "account_id" : account_id,
          "timestamp" : wait_time,
          "processed" : False }
-
-
 
         print(f'before cashback loop: {self.accounts[account_id]}')
         
         #if self.process_cashback[self.payment_id]["timestamp"] <= timestamp:
-        if timestamp >= wait_time:
+        if timestamp >= wait_time and not in self.process_cashback[self.payment_id]["processed"]:
             self.deposit(wait_time, account_id, cashback)
             self.accounts[account_id] += cashback
         
         print(f'after cashback loop: {self.accounts[account_id]}')
-
-
-        self.payment_transaction[self.payment_id]= account_id
+        
+        # Initialize list if account not already in payment transaction
+        if account_id not in self.payment_transaction:
+            self.payment_transaction[account_id] = []
+        # Record payment transaction
+        self.payment_transaction[account_id].append(self.payment_id)
 
         return (f"payment{self.payment_id}")
         
 
-
     def get_payment_status(self, timestamp: int, account_id: str, payment: str) -> str | None :
-        #account check 
+        # account check 
         if account_id not in self.accounts:
             return None
 
@@ -140,20 +243,21 @@ class BankingSystemImpl(BankingSystem):
         index = len(characters) - 1
         payment_number = int(characters[index])
         print(f'payment string: {payment}, payment number: {payment_number}')
-
-
         
+        # Check if account id has recorded payments
+        if account_id not in self.payment_transaction:
+            return None
         
         # compare the last character with the payment attribute
-        if payment_number not in self.payment_transaction:
+        if payment_number not in self.payment_transaction[account_id]:
             return None
 
         # payment for different account check
-        if self.payment_transaction[payment_number] != account_id:
-            return None
+        #if self.payment_transaction[account_id] != payment_number:
+            #return None
 
         # Access cashback dictionary
-        cashback_info = self.process_cashback[payment_number]
+        cashback_info = self.process_cashback[(account_id, payment_number)]
         
         # Check whether cashback has already been processed
         if cashback_info["processed"] == True:
@@ -167,7 +271,7 @@ class BankingSystemImpl(BankingSystem):
             
         # If you get this far, payment is still in progress
         return "IN_PROGRESS"
-        
+    """        
 
 if __name__ == "__main__":
     
@@ -183,4 +287,6 @@ if __name__ == "__main__":
     print(bs.get_payment_status(864000015, 'account1', 'payment1'))
     print(bs.pay(864000023, 'account1', 200))
     print(bs.get_payment_status(864000024, 'account1', 'payment1'))
+
+
 
